@@ -1,0 +1,22 @@
+[package]
+name = "azure-projmon"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+futures = "0.3"
+tokio = {version = "1.28", features = ["full"] }
+phf = {version = "0.11", features = ["default", "macros"] }
+swayipc-async = "2.0"
+
+
+
+[profile.release]
+strip = true
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+target-cpu = "native"
+
