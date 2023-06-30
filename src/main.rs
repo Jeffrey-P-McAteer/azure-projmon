@@ -94,7 +94,8 @@ async fn async_main(args: Vec<String>) {
     rect_count: 0,
   };
 
-  unsafe { evdi_sys::evdi_connect(evidi_handle, std::ptr::null(), 0, 6220800 ) };
+  let edid = std::ffi::CString::new("VIRT-1").unwrap();
+  unsafe { evdi_sys::evdi_connect(evidi_handle, edid.as_ptr() as *const std::os::raw::c_uchar, edid.as_bytes().len() as std::os::raw::c_uint, 6220800 ) };
 
   tokio::time::sleep( std::time::Duration::from_millis(250) ).await;
 
