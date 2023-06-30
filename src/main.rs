@@ -28,6 +28,7 @@ async fn async_main(args: Vec<String>) {
   let mut sway_conn = dump_error_and_ret!( swayipc_async::Connection::new().await );
 
   let mut connected_projector_name = String::new();
+  let mut connected_projector_ws = String::new();
 
   println!("Waiting for one of {:?} to be connected...", PROJECTOR_DISPLAY_NAMES);
   loop {
@@ -40,8 +41,12 @@ async fn async_main(args: Vec<String>) {
 
     if let Ok(outputs) = sway_conn.get_outputs().await {
       for output in outputs.iter() {
-        if PROJECTOR_DISPLAY_NAMES.contains( &output.name.as_str() ) {
+        if !output.active || !output.dpms {
+          continue; // output is either inactive or DPMS says it's powered off.
+        }
+        if PROJECTOR_DISPLAY_NAMES.contains( &output.name.as_str() ) && !output.current_workspace.is_none() {
           connected_projector_name = output.name.clone();
+          connected_projector_ws = output.current_workspace.clone().expect("Alread checked we are !.is_none()");
         }
       }
     }
@@ -51,11 +56,13 @@ async fn async_main(args: Vec<String>) {
     }
     
 
-    tokio::time::sleep( std::time::Duration::from_millis(1250) ).await;    
+    tokio::time::sleep( std::time::Duration::from_millis(850) ).await;    
   }
 
   println!("");
-  println!("Saw connected projector at {:?}", &connected_projector_name);
+  println!("Saw connected projector at {:?} with workspace {:?}", &connected_projector_name, &connected_projector_ws);
+
+
 
   // Once projector is connected, create EVDI virtual monitor & tell sway to position at -1080,0
 
