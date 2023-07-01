@@ -86,7 +86,7 @@ async fn async_main(args: Vec<String>) {
     dump_error!( sway_conn.run_command(format!("create_output {}", PROJ_MON_NAME).as_str()).await );
   }
 
-  let mut headless_display_name = 
+  let mut headless_display_name = String::new();
 
   // Move virtual display to -1920,0; to left of main screen
   dump_error!( sway_conn.run_command(format!("output {} mode 1920x1080 pos -1920 0 bg #000000 solid_color", PROJ_MON_NAME).as_str()).await );
@@ -95,19 +95,18 @@ async fn async_main(args: Vec<String>) {
   // Print sway displays
   if let Ok(outputs) = sway_conn.get_outputs().await {
     for output in outputs.iter() {
-      println!("");
-      println!("output = {:?}", output);
-      println!("");
+      if output.name.contains("HEADLESS") || output.name.contains(PROJ_MON_NAME) {
+        headless_display_name = output.name.clone();
+      }
     }
   }
+
+  println!("headless_display_name = {}", headless_display_name.as_str());
 
   tokio::time::sleep( std::time::Duration::from_millis(250) ).await;
 
   // Now remove the display
-  dump_error!( sway_conn.run_command(format!("output {} unplug", PROJ_MON_NAME).as_str()).await );
-  for i in 0..12 {
-    dump_error!( sway_conn.run_command(format!("output HEADLESS-{} unplug", i).as_str()).await );
-  }
+  dump_error!( sway_conn.run_command(format!("output {} unplug", headless_display_name).as_str()).await );
 
   println!("Done!");
 
