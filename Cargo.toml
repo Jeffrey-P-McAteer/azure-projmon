@@ -11,7 +11,7 @@ phf = {version = "0.11", features = ["default", "macros"] }
 once_cell = "1.17"
 swayipc-async = "2.0"
 
-evdi-sys = "0.4.0"
+# evdi-sys = "0.4.0"
 
 
 [profile.release]

@@ -22,6 +22,8 @@ const PROJECTOR_DISPLAY_NAMES:  &'static [&'static str] = &[
   "DP1", "DP-1"
 ];
 
+const PROJ_MON_NAME: &'static str = "PROJMON-1";
+
 
 async fn async_main(args: Vec<String>) {
   let exit_signal_handler = tokio::task::spawn(handle_exit_signals());
@@ -30,6 +32,7 @@ async fn async_main(args: Vec<String>) {
 
   let mut connected_projector_name = String::new();
   let mut connected_projector_ws = String::new();
+  let mut have_projmon_display = false;
 
   println!("Waiting for one of {:?} to be connected...", PROJECTOR_DISPLAY_NAMES);
   loop {
@@ -48,6 +51,9 @@ async fn async_main(args: Vec<String>) {
         if PROJECTOR_DISPLAY_NAMES.contains( &output.name.as_str() ) && !output.current_workspace.is_none() {
           connected_projector_name = output.name.clone();
           connected_projector_ws = output.current_workspace.clone().expect("Alread checked we are !.is_none()");
+        }
+        if PROJ_MON_NAME == output.name.as_str() {
+          have_projmon_display = true;
         }
       }
     }
@@ -71,33 +77,17 @@ async fn async_main(args: Vec<String>) {
   // Set black wallpaper + virtual location to -10 screens to the left (sway prevents mouse from jumping! \o/)
   dump_error!( sway_conn.run_command(format!("output {} mode 1920x1080 pos -19200 0 bg #000000 solid_color", &connected_projector_name).as_str()).await );
 
-
-  // Once projector is connected, create EVDI virtual monitor & tell sway to position at -1080,0
-
-  let evidi_handle = unsafe { evdi_sys::evdi_open_attached_to( std::ptr::null() ) };
-  if evidi_handle.is_null() {
-    eprintln!("Got null pointer from evdi_sys::evdi_open_attached_to!");
-    return;
+  // Create new virtual display
+  if ! have_projmon_display {
+    println!("Telling sway to create {}", PROJ_MON_NAME);
+    dump_error!( sway_conn.run_command(format!("create_output {}", PROJ_MON_NAME).as_str()).await );
   }
 
-  // 1920x1080 * 3 bytes/pixel = 
-  //let mut evidi_screen_mem: [u8; 6220800] = [0; 6220800]; // blows stack
-  let mut evidi_screen_mem = vec![0_u8; 6220800]; // Directly allocated on heap
+  let mut headless_display_name = 
 
-  let evidi_buff = evdi_sys::evdi_buffer {
-    id: 0,
-    buffer: evidi_screen_mem.as_mut_ptr() as *mut core::ffi::c_void,
-    width: 1920,
-    height: 1080,
-    stride: 3,
-    rects:  std::ptr::null_mut::<evdi_sys::evdi_rect>(), // these 2 are modified by EVDI runtime to inform us of damaged areas to re-paint.
-    rect_count: 0,
-  };
+  // Move virtual display to -1920,0; to left of main screen
+  dump_error!( sway_conn.run_command(format!("output {} mode 1920x1080 pos -1920 0 bg #000000 solid_color", PROJ_MON_NAME).as_str()).await );
 
-  let edid = std::ffi::CString::new("VIRT-1").unwrap();
-  unsafe { evdi_sys::evdi_connect(evidi_handle, edid.as_ptr() as *const std::os::raw::c_uchar, edid.as_bytes().len() as std::os::raw::c_uint, 6220800 ) };
-
-  tokio::time::sleep( std::time::Duration::from_millis(250) ).await;
 
   // Print sway displays
   if let Ok(outputs) = sway_conn.get_outputs().await {
@@ -110,10 +100,11 @@ async fn async_main(args: Vec<String>) {
 
   tokio::time::sleep( std::time::Duration::from_millis(250) ).await;
 
-  // Finally close it
-  unsafe { evdi_sys::evdi_disconnect(evidi_handle); }
-  unsafe { evdi_sys::evdi_close(evidi_handle) };
-
+  // Now remove the display
+  dump_error!( sway_conn.run_command(format!("output {} unplug", PROJ_MON_NAME).as_str()).await );
+  for i in 0..12 {
+    dump_error!( sway_conn.run_command(format!("output HEADLESS-{} unplug", i).as_str()).await );
+  }
 
   println!("Done!");
 
