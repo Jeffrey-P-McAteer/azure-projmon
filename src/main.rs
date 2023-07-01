@@ -10,6 +10,8 @@ use tokio::io::AsyncWriteExt;
 pub mod macros;
 use macros::*;
 
+mod gui;
+
 fn main() {
   let args: Vec<String> = std::env::args().collect();
   let rt = tokio::runtime::Builder::new_multi_thread()
@@ -111,7 +113,7 @@ async fn async_main(args: Vec<String>) {
     let connected_projector_name = connected_projector_name.clone();
     let connected_projector_ws = connected_projector_ws.clone();
     tokio::spawn(async move {
-      render_ui_on_projector( headless_display_name.as_str(), connected_projector_name.as_str(), connected_projector_ws.as_str() );
+      gui::render_ui_on_projector( headless_display_name.as_str(), connected_projector_name.as_str(), connected_projector_ws.as_str() ).await;
     })
   };
 
@@ -130,32 +132,6 @@ async fn async_main(args: Vec<String>) {
   println!("Done!");
 
   EXIT_TASKS_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
-
-}
-
-
-fn render_ui_on_projector(
-  headless_display_name: &str,
-  connected_projector_name: &str,
-  connected_projector_ws: &str
-) {
-  use kiss3d::nalgebra::{Vector3, UnitQuaternion};
-  use kiss3d::window::Window;
-  use kiss3d::light::Light;
-
-  let mut window = Window::new("azure-projmon display");
-  let mut c      = window.add_cube(1.0, 1.0, 1.0);
-
-  c.set_color(1.0, 0.0, 0.0);
-
-  window.set_light(Light::StickToCamera);
-
-  let rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.014);
-
-  while window.render() {
-    c.prepend_to_local_rotation(&rot);
-  }
-
 
 }
 
