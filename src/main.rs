@@ -1,4 +1,7 @@
 
+// TODO clean up l8ter
+#![allow(unused_imports, unused_mut, unused_variables, unused_assignments)]
+
 use futures::prelude::*;
 
 use tokio::io::AsyncWriteExt;
