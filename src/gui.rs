@@ -1,5 +1,4 @@
 
-use three_d::*;
 
 
 pub async fn render_ui_on_projector(
@@ -7,159 +6,210 @@ pub async fn render_ui_on_projector(
   connected_projector_name: &str,
   connected_projector_ws: &str
 ) {
-  let window = Window::new(WindowSettings {
-      title: "Logo!".to_string(),
-      max_size: Some((512, 512)),
-      ..Default::default()
-  })
-  .unwrap();
-  let context = window.gl();
-
-  let mut camera = Camera::new_perspective(
-      window.viewport(),
-      vec3(0.0, 0.0, 2.2),
-      vec3(0.0, 0.0, 0.0),
-      vec3(0.0, 1.0, 0.0),
-      degrees(60.0),
-      0.1,
-      10.0,
+  let app = CubeExample::default();
+  rend3_framework::start(
+      app,
+      winit::window::WindowBuilder::new()
+          .with_title("cube-example")
+          .with_maximized(true),
   );
-
-  let mut loaded = three_d_asset::io::load_async(&[
-          "https://asny.github.io/three-d/assets/rust_logo.png",
-      ])
-      .await
-      .expect("failed to download the necessary assets");
-
-  let image = Texture2D::new(&context, &loaded.deserialize("").unwrap());
-
-  let positions = vec![
-      vec3(0.55, -0.4, 0.0),  // bottom right
-      vec3(-0.55, -0.4, 0.0), // bottom left
-      vec3(0.0, 0.6, 0.0),    // top
-  ];
-  let colors = vec![
-      Color::new(255, 0, 0, 255), // bottom right
-      Color::new(0, 255, 0, 255), // bottom left
-      Color::new(0, 0, 255, 255), // top
-  ];
-  let cpu_mesh = CpuMesh {
-      positions: Positions::F32(positions),
-      colors: Some(colors),
-      ..Default::default()
-  };
-
-  // Construct a model, with a default color material, thereby transferring the mesh data to the GPU
-  let model = Gm::new(Mesh::new(&context, &cpu_mesh), ColorMaterial::default());
-
-  window.render_loop(move |frame_input| {
-      camera.set_viewport(frame_input.viewport);
-
-      let geometries: Vec<Axes> = vec![];
-
-      frame_input
-          .screen()
-          .clear(ClearState::color_and_depth(1.0, 1.0, 1.0, 1.0, 1.0))
-          //.apply_screen_material(&LogoMaterial { image: &image }, &camera, &[])
-          //.render(&camera, &model, &[]);
-          .render_with_material(&LogoMaterial { image: &image }, &camera, &geometries, &[]);
-
-      FrameOutput::default()
-  });
-
 }
 
-struct LogoMaterial<'a> {
-    image: &'a Texture2D,
+
+
+use std::sync::Arc;
+
+fn vertex(pos: [f32; 3]) -> glam::Vec3 {
+    glam::Vec3::from(pos)
 }
 
-impl Material for LogoMaterial<'_> {
-    /*fn fragment_shader_source(&self, _lights: &[&dyn Light]) -> String {
-        //include_str!("shader.frag").to_string()
-        r#"
-uniform sampler2D image;
+fn create_mesh() -> rend3::types::Mesh {
+    let vertex_positions = [
+        // far side (0.0, 0.0, 1.0)
+        vertex([-1.0, -1.0, 1.0]),
+        vertex([1.0, -1.0, 1.0]),
+        vertex([1.0, 1.0, 1.0]),
+        vertex([-1.0, 1.0, 1.0]),
+        // near side (0.0, 0.0, -1.0)
+        vertex([-1.0, 1.0, -1.0]),
+        vertex([1.0, 1.0, -1.0]),
+        vertex([1.0, -1.0, -1.0]),
+        vertex([-1.0, -1.0, -1.0]),
+        // right side (1.0, 0.0, 0.0)
+        vertex([1.0, -1.0, -1.0]),
+        vertex([1.0, 1.0, -1.0]),
+        vertex([1.0, 1.0, 1.0]),
+        vertex([1.0, -1.0, 1.0]),
+        // left side (-1.0, 0.0, 0.0)
+        vertex([-1.0, -1.0, 1.0]),
+        vertex([-1.0, 1.0, 1.0]),
+        vertex([-1.0, 1.0, -1.0]),
+        vertex([-1.0, -1.0, -1.0]),
+        // top (0.0, 1.0, 0.0)
+        vertex([1.0, 1.0, -1.0]),
+        vertex([-1.0, 1.0, -1.0]),
+        vertex([-1.0, 1.0, 1.0]),
+        vertex([1.0, 1.0, 1.0]),
+        // bottom (0.0, -1.0, 0.0)
+        vertex([1.0, -1.0, 1.0]),
+        vertex([-1.0, -1.0, 1.0]),
+        vertex([-1.0, -1.0, -1.0]),
+        vertex([1.0, -1.0, -1.0]),
+    ];
 
-in vec2 uvs;
+    let index_data: &[u32] = &[
+        0, 1, 2, 2, 3, 0, // far
+        4, 5, 6, 6, 7, 4, // near
+        8, 9, 10, 10, 11, 8, // right
+        12, 13, 14, 14, 15, 12, // left
+        16, 17, 18, 18, 19, 16, // top
+        20, 21, 22, 22, 23, 20, // bottom
+    ];
 
-layout (location = 0) out vec4 outColor;
-
-vec3 srgb_from_rgb(vec3 rgb) {
-    vec3 a = vec3(0.055, 0.055, 0.055);
-    vec3 ap1 = vec3(1.0, 1.0, 1.0) + a;
-    vec3 g = vec3(2.4, 2.4, 2.4);
-    vec3 ginv = 1.0 / g;
-    vec3 select = step(vec3(0.0031308, 0.0031308, 0.0031308), rgb);
-    vec3 lo = rgb * 12.92;
-    vec3 hi = ap1 * pow(rgb, ginv) - a;
-    return mix(lo, hi, select);
+    rend3::types::MeshBuilder::new(vertex_positions.to_vec(), rend3::types::Handedness::Left)
+        .with_indices(index_data.to_vec())
+        .build()
+        .unwrap()
 }
 
-void main()
-{
-    outColor = vec4(max(uvs.x, 1.0 - uvs.x), uvs.y, 1.0 - uvs.y, texture(image, uvs).g);
+const SAMPLE_COUNT: rend3::types::SampleCount = rend3::types::SampleCount::One;
+
+#[derive(Default)]
+struct CubeExample {
+    object_handle: Option<rend3::types::ObjectHandle>,
+    directional_light_handle: Option<rend3::types::DirectionalLightHandle>,
 }
-"#.to_string()
+
+impl rend3_framework::App for CubeExample {
+    const HANDEDNESS: rend3::types::Handedness = rend3::types::Handedness::Left;
+
+    fn sample_count(&self) -> rend3::types::SampleCount {
+        SAMPLE_COUNT
     }
-    */
-    fn fragment_shader(&self, _lights: &[&dyn Light]) -> FragmentShader {
-      FragmentShader {
-        source: r#"
-uniform sampler2D image;
 
-in vec2 uvs;
+    fn setup(
+        &mut self,
+        _event_loop: &winit::event_loop::EventLoop<rend3_framework::UserResizeEvent<()>>,
+        _window: &winit::window::Window,
+        renderer: &Arc<rend3::Renderer>,
+        _routines: &Arc<rend3_framework::DefaultRoutines>,
+        _surface_format: rend3::types::TextureFormat,
+    ) {
+        // Create mesh and calculate smooth normals based on vertices
+        let mesh = create_mesh();
 
-layout (location = 0) out vec4 outColor;
+        // Add mesh to renderer's world.
+        //
+        // All handles are refcounted, so we only need to hang onto the handle until we
+        // make an object.
+        let mesh_handle = renderer.add_mesh(mesh);
 
-vec3 srgb_from_rgb(vec3 rgb) {
-    vec3 a = vec3(0.055, 0.055, 0.055);
-    vec3 ap1 = vec3(1.0, 1.0, 1.0) + a;
-    vec3 g = vec3(2.4, 2.4, 2.4);
-    vec3 ginv = 1.0 / g;
-    vec3 select = step(vec3(0.0031308, 0.0031308, 0.0031308), rgb);
-    vec3 lo = rgb * 12.92;
-    vec3 hi = ap1 * pow(rgb, ginv) - a;
-    return mix(lo, hi, select);
-}
+        // Add PBR material with all defaults except a single color.
+        let material = rend3_routine::pbr::PbrMaterial {
+            albedo: rend3_routine::pbr::AlbedoComponent::Value(glam::Vec4::new(0.0, 0.5, 0.5, 1.0)),
+            ..rend3_routine::pbr::PbrMaterial::default()
+        };
+        let material_handle = renderer.add_material(material);
 
-void main()
-{
-    outColor = vec4(max(uvs.x, 1.0 - uvs.x), uvs.y, 1.0 - uvs.y, texture(image, uvs).g);
-}
-"#.to_string(),
-        attributes: FragmentAttributes {
-          uv: true,
-          ..FragmentAttributes::NONE
+        // Combine the mesh and the material with a location to give an object.
+        let object = rend3::types::Object {
+            mesh_kind: rend3::types::ObjectMeshKind::Static(mesh_handle),
+            material: material_handle,
+            transform: glam::Mat4::IDENTITY,
+        };
+        // Creating an object will hold onto both the mesh and the material
+        // even if they are deleted.
+        //
+        // We need to keep the object handle alive.
+        self.object_handle = Some(renderer.add_object(object));
+
+        let view_location = glam::Vec3::new(3.0, 3.0, -5.0);
+        let view = glam::Mat4::from_euler(glam::EulerRot::XYZ, -0.55, 0.5, 0.0);
+        let view = view * glam::Mat4::from_translation(-view_location);
+
+        // Set camera's location
+        renderer.set_camera_data(rend3::types::Camera {
+            projection: rend3::types::CameraProjection::Perspective { vfov: 60.0, near: 0.1 },
+            view,
+        });
+
+        // Create a single directional light
+        //
+        // We need to keep the directional light handle alive.
+        self.directional_light_handle = Some(renderer.add_directional_light(rend3::types::DirectionalLight {
+            color: glam::Vec3::ONE,
+            intensity: 10.0,
+            // Direction will be normalized
+            direction: glam::Vec3::new(-1.0, -4.0, 2.0),
+            distance: 400.0,
+            resolution: 2048,
+        }));
+    }
+
+    fn handle_event(
+        &mut self,
+        window: &winit::window::Window,
+        renderer: &Arc<rend3::Renderer>,
+        routines: &Arc<rend3_framework::DefaultRoutines>,
+        base_rendergraph: &rend3_routine::base::BaseRenderGraph,
+        surface: Option<&Arc<rend3::types::Surface>>,
+        resolution: glam::UVec2,
+        event: rend3_framework::Event<'_, ()>,
+        control_flow: impl FnOnce(winit::event_loop::ControlFlow),
+    ) {
+        match event {
+            // Close button was clicked, we should close.
+            rend3_framework::Event::WindowEvent {
+                event: winit::event::WindowEvent::CloseRequested,
+                ..
+            } => {
+                control_flow(winit::event_loop::ControlFlow::Exit);
+            }
+            rend3_framework::Event::MainEventsCleared => {
+                window.request_redraw();
+            }
+            // Render!
+            rend3_framework::Event::RedrawRequested(_) => {
+                // Get a frame
+                let frame = surface.unwrap().get_current_texture().unwrap();
+
+                // Swap the instruction buffers so that our frame's changes can be processed.
+                renderer.swap_instruction_buffers();
+                // Evaluate our frame's world-change instructions
+                let mut eval_output = renderer.evaluate_instructions();
+
+                // Lock the routines
+                let pbr_routine = rend3_framework::lock(&routines.pbr);
+                let tonemapping_routine = rend3_framework::lock(&routines.tonemapping);
+
+                // Build a rendergraph
+                let mut graph = rend3::graph::RenderGraph::new();
+
+                // Import the surface texture into the render graph.
+                let frame_handle =
+                    graph.add_imported_render_target(&frame, 0..1, rend3::graph::ViewportRect::from_size(resolution));
+                // Add the default rendergraph without a skybox
+                base_rendergraph.add_to_graph(
+                    &mut graph,
+                    &eval_output,
+                    &pbr_routine,
+                    None,
+                    &tonemapping_routine,
+                    frame_handle,
+                    resolution,
+                    SAMPLE_COUNT,
+                    glam::Vec4::ZERO,
+                    glam::Vec4::new(0.10, 0.05, 0.10, 1.0), // Nice scene-referred purple
+                );
+
+                // Dispatch a render using the built up rendergraph!
+                graph.execute(renderer, &mut eval_output);
+
+                // Present the frame
+                frame.present();
+            }
+            // Other events we don't care about
+            _ => {}
         }
-      }
-    }
-
-    // fn id(&self) -> u16 {
-    //     0b1u16
-    // }
-
-    // fn fragment_attributes(&self) -> FragmentAttributes {
-    //     FragmentAttributes {
-    //         uv: true,
-    //         ..FragmentAttributes::NONE
-    //     }
-    // }
-
-    fn use_uniforms(&self, program: &Program, _camera: &Camera, _lights: &[&dyn Light]) {
-        program.use_texture("image", &self.image);
-    }
-
-    fn render_states(&self) -> RenderStates {
-        RenderStates {
-            write_mask: WriteMask::COLOR,
-            blend: Blend::TRANSPARENCY,
-            ..Default::default()
-        }
-    }
-
-    fn material_type(&self) -> MaterialType {
-        MaterialType::Transparent
     }
 }
-
-
-

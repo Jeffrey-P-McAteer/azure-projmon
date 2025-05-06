@@ -11,9 +11,12 @@ phf = {version = "0.11", features = ["default", "macros"] }
 once_cell = "1.17"
 swayipc-async = "2.0"
 
-three-d = "0.15"
-# three-d-asset = {git = "https://github.com/asny/three-d-asset",features = ["hdr", "http"] }
-three-d-asset = {version = "0.5", features = ["hdr", "http"] }
+# Graphics
+rend3 = "0.3"
+rend3-framework = "0.3"
+rend3-routine = "0.3"
+glam = "0.22"
+winit = "0.28"
 
 
 [profile.release]
